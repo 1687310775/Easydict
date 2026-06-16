@@ -30,10 +30,13 @@ typedef void(^EZTitlebarQuickActionBlock)(EZTitlebarQuickAction);
 @property (nonatomic, strong) EZOpenLinkButton *appleDictionaryButton;
 
 @property (nonatomic, strong) EZOpenLinkButton *quickActionButton;
+@property (nonatomic, strong) EZOpenLinkButton *favoriteButton;
 
 @property (nonatomic, copy) EZTitlebarQuickActionBlock menuActionBlock;
 
 - (void)updateShortcutButtonsToolTip;
+- (void)resetFavoriteStateForNewQuery;
+- (void)updateFavoriteButton;
 
 @end
 

@@ -104,6 +104,12 @@ brew install --cask easydict
 
 ---
 
+## Favorites and Anki Export
+
+This customized build can save the current query as a favorite from the query window title bar. A favorite stores the query text plus available service results, including Youdao and DeepL translations when those services have returned content.
+
+Open Settings -> Favorites to search, sort, delete, batch select, filter by date range, and export favorites as CSV, TSV, or APKG files for Anki.
+
 ## Documentation
 
 - 📖 [Complete Usage Guide](./docs/en/GUIDE.md) - Detailed features, configuration and tips

@@ -838,6 +838,8 @@ static BOOL ez_frame_equal_with_tolerance(CGRect lhs, CGRect rhs, CGFloat tolera
 
     MMLogInfo(@"query text: %@", self.queryText.truncated);
 
+    [self.baseQueryWindow.titleBar resetFavoriteStateForNewQuery];
+
     // !!!: Reset all result before new query.
     [self resetAllResults];
 

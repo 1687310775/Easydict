@@ -62,14 +62,15 @@ extension MDictReader {
     }
 
     static func readUInt64BE(_ data: Data, at offset: Int) -> UInt64 {
-        UInt64(data[offset]) << 56
-            | UInt64(data[offset + 1]) << 48
-            | UInt64(data[offset + 2]) << 40
-            | UInt64(data[offset + 3]) << 32
-            | UInt64(data[offset + 4]) << 24
-            | UInt64(data[offset + 5]) << 16
-            | UInt64(data[offset + 6]) << 8
-            | UInt64(data[offset + 7])
+        let byte0 = UInt64(data[offset]) << 56
+        let byte1 = UInt64(data[offset + 1]) << 48
+        let byte2 = UInt64(data[offset + 2]) << 40
+        let byte3 = UInt64(data[offset + 3]) << 32
+        let byte4 = UInt64(data[offset + 4]) << 24
+        let byte5 = UInt64(data[offset + 5]) << 16
+        let byte6 = UInt64(data[offset + 6]) << 8
+        let byte7 = UInt64(data[offset + 7])
+        return byte0 | byte1 | byte2 | byte3 | byte4 | byte5 | byte6 | byte7
     }
 
     static func findNullTerminator(

@@ -17,6 +17,7 @@
 
 typedef NS_ENUM(NSInteger, EZTitlebarButtonType) {
     EZTitlebarButtonTypePin = 0,
+    EZTitlebarButtonTypeFavorite,
     EZTitlebarButtonTypeGoogle,
     EZTitlebarButtonTypeAppleDic,
     EZTitlebarButtonTypeEudicDic,
@@ -33,6 +34,9 @@ typedef NS_ENUM(NSInteger, EZTitlebarButtonType) {
 
 @property (nonatomic, assign) CGSize imageSize;
 @property (nonatomic, assign) CGFloat imageWidth;
+
+@property (nonatomic, copy) NSString *currentFavoriteQueryText;
+@property (nonatomic, assign) BOOL currentFavoriteSelected;
 
 @end
 
@@ -80,6 +84,7 @@ typedef NS_ENUM(NSInteger, EZTitlebarButtonType) {
     [_stackView removeFromSuperview];
     _stackView = nil;
     _quickActionButton = nil;
+    _favoriteButton = nil;
     _quickActionMenu = nil;
 
     [self updatePinButton];
@@ -108,6 +113,9 @@ typedef NS_ENUM(NSInteger, EZTitlebarButtonType) {
     if (MyConfiguration.shared.showQuickActionButton) {
         [self.stackView addArrangedSubview:self.quickActionButton];
     }
+
+    [self.stackView addArrangedSubview:self.favoriteButton];
+    [self updateFavoriteButton];
     
     for (NSNumber *typeNumber in [self shortcutButtonTypes]) {
         EZTitlebarButtonType buttonType = typeNumber.integerValue;
@@ -204,7 +212,7 @@ typedef NS_ENUM(NSInteger, EZTitlebarButtonType) {
             @[
                 @{
                     @"title" : @"add_to_favorites",
-                    @"action" : NSStringFromSelector(@selector(addFavoriteIfNeeded))
+                    @"action" : NSStringFromSelector(@selector(toggleFavoriteIfNeeded))
                 },
                 @{
                     @"title" : @"replace_newline_with_space",
@@ -257,6 +265,8 @@ typedef NS_ENUM(NSInteger, EZTitlebarButtonType) {
         mm_weakify(self);
         [quickActionButton setClickBlock:^(EZButton *_Nonnull button) {
             mm_strongify(self);
+            [self updateFavoriteButton];
+            [self updateFavoriteMenuItemTitle];
             [self.quickActionMenu popUpBelowView:self.quickActionButton];
         }];
         
@@ -274,6 +284,32 @@ typedef NS_ENUM(NSInteger, EZTitlebarButtonType) {
         }];
     }
     return _quickActionButton;
+}
+
+
+- (EZOpenLinkButton *)favoriteButton {
+    if (!_favoriteButton) {
+        EZOpenLinkButton *favoriteButton = [[EZOpenLinkButton alloc] init];
+        _favoriteButton = favoriteButton;
+        favoriteButton.contentTintColor = NSColor.clearColor;
+        favoriteButton.toolTip = @"☆ Favorite";
+
+        mm_weakify(self);
+        [favoriteButton setClickBlock:^(EZButton *_Nonnull button) {
+            mm_strongify(self);
+            [self toggleFavoriteIfNeeded];
+        }];
+
+        [favoriteButton executeOnAppearanceChange:^(EZButton *button, BOOL isDarkMode) {
+            mm_strongify(self);
+            [self updateFavoriteButton];
+        }];
+
+        [favoriteButton mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.size.mas_equalTo(self.buttonSize);
+        }];
+    }
+    return _favoriteButton;
 }
 
 - (EZOpenLinkButton *)googleButton {
@@ -387,6 +423,8 @@ typedef NS_ENUM(NSInteger, EZTitlebarButtonType) {
     if (type == EZTitlebarButtonTypePin) {
         shortcutStr = MyConfiguration.shared.pinShortcutString;
         hint = self.pin ? NSLocalizedString(@"unpin", nil) : NSLocalizedString(@"pin", nil);
+    } else if (type == EZTitlebarButtonTypeFavorite) {
+        hint = [self isCurrentQueryFavorited] ? @"★ Favorited" : @"☆ Favorite";
     } else if (type == EZTitlebarButtonTypeGoogle) {
         shortcutStr = MyConfiguration.shared.googleShortcutString;
         hint = NSLocalizedString(@"open_in_google", nil);
@@ -427,24 +465,72 @@ typedef NS_ENUM(NSInteger, EZTitlebarButtonType) {
     self.pinButton.image = self.pin ? selectedImage : normalTintedImage;
 }
 
-- (void)addFavoriteIfNeeded {
+- (BOOL)isCurrentQueryFavorited {
     EZBaseQueryWindow *window = (EZBaseQueryWindow *)self.window;
     EZBaseQueryViewController *viewController = window.queryViewController;
     EZQueryModel *queryModel = viewController.queryModel;
-    
+    NSString *queryText = queryModel.queryText;
+    if (queryText.length == 0 || self.currentFavoriteQueryText.length == 0) {
+        return NO;
+    }
+
+    return self.currentFavoriteSelected && [self.currentFavoriteQueryText isEqualToString:queryText];
+}
+
+- (void)resetFavoriteStateForNewQuery {
+    EZBaseQueryWindow *window = (EZBaseQueryWindow *)self.window;
+    EZBaseQueryViewController *viewController = window.queryViewController;
+    NSString *queryText = viewController.queryModel.queryText;
+    self.currentFavoriteQueryText = queryText ?: @"";
+    self.currentFavoriteSelected = NO;
+    [self updateFavoriteButton];
+    [self updateFavoriteMenuItemTitle];
+}
+
+- (void)updateFavoriteButton {
+    BOOL isFavorited = [self isCurrentQueryFavorited];
+    NSString *symbolName = isFavorited ? @"star.fill" : @"star";
+    NSImage *image = [NSImage ez_imageWithSymbolName:symbolName];
+    NSColor *lightTintColor = isFavorited ? [NSColor systemYellowColor] : [NSColor mm_colorWithHexString:@"#797A7F"];
+    NSColor *darkTintColor = isFavorited ? [NSColor systemYellowColor] : [NSColor mm_colorWithHexString:@"#C0C1C4"];
+    NSColor *tintColor = self.favoriteButton.isDarkMode ? darkTintColor : lightTintColor;
+    self.favoriteButton.image = [[image imageWithTintColor:tintColor] resizeToSize:self.imageSize];
+    self.favoriteButton.toolTip = [self toolTipStrWithButtonType:EZTitlebarButtonTypeFavorite];
+}
+
+- (void)updateFavoriteMenuItemTitle {
+    for (NSMenuItem *item in self.quickActionMenu.itemArray) {
+        if (item.action == @selector(toggleFavoriteIfNeeded)) {
+            item.title = [self isCurrentQueryFavorited] ? @"★ Favorited" : @"☆ Favorite";
+            break;
+        }
+    }
+}
+
+- (void)toggleFavoriteIfNeeded {
+    EZBaseQueryWindow *window = (EZBaseQueryWindow *)self.window;
+    EZBaseQueryViewController *viewController = window.queryViewController;
+    EZQueryModel *queryModel = viewController.queryModel;
+
     NSString *queryText = queryModel.queryText;
     if (queryText.length == 0) {
         return;
     }
-    
-    BOOL isFavorited = [QueryRecordManager.shared containsRecordWithQueryText:queryText
-                                                                            in:RecordTypeFavorites];
-    if (!isFavorited) {
-        [QueryRecordManager.shared addRecordWithQueryText:queryText
-                                             fromLanguage:queryModel.queryFromLanguage
-                                               toLanguage:queryModel.queryTargetLanguage
-                                                       to:RecordTypeFavorites];
+
+    if ([self isCurrentQueryFavorited]) {
+        [QueryRecordManager.shared removeRecordWithQueryText:queryText from:RecordTypeFavorites];
+        self.currentFavoriteSelected = NO;
+    } else {
+        [QueryRecordManager.shared addFavoriteWithQueryText:queryText
+                                               fromLanguage:queryModel.queryFromLanguage
+                                                 toLanguage:queryModel.queryTargetLanguage
+                                                   services:viewController.services];
+        self.currentFavoriteQueryText = queryText;
+        self.currentFavoriteSelected = YES;
     }
+
+    [self updateFavoriteButton];
+    [self updateFavoriteMenuItemTitle];
 }
 
 
